@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>かるた読み上げ</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi44GL44KL44Gf6Kqt44G/5LiK44GS44Ki44OX44OqIiwic2hvcnRfbmFtZSI6IuOBi+OCi+OBnyIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjNDI4NWY0In0=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+        .upload-area.hidden {
+            display: none;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .upload-text {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .card-display {
+            display: none;
+            text-align: center;
+        }
+        .card-display.active {
+            display: block;
+        }
+        .card-text {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            margin: 40px 0;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.6;
+        }
+        .card-number {
+            font-size: 18px;
+            color: #999;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            flex: 1;
+            max-width: 120px;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-prev {
+            background: #95a5a6;
+            color: white;
+        }
+        .btn-play {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-playing {
+            background: #e74c3c;
+        }
+        .btn-next {
+            background: #3498db;
+            color: white;
+        }
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎴 かるた読み上げ</h1>
+        
+        <div class="error" id="error"></div>
+
+        <div class="card-display" id="cardDisplay">
+            <div class="card-number" id="cardNumber"></div>
+            <div class="card-text" id="cardText">読み込み中...</div>
+            
+            <div class="controls">
+                <button class="btn-prev" id="btnPrev" disabled>◀ もどる</button>
+                <button class="btn-play" id="btnPlay">▶ 再生</button>
+                <button class="btn-next" id="btnNext" disabled>進む ▶</button>
+            </div>
+            
+            <div class="status" id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        let cards = [];
+        let shuffledIndices = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let utterance = null;
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const cardDisplay = document.getElementById('cardDisplay');
+        const cardText = document.getElementById('cardText');
+        const cardNumber = document.getElementById('cardNumber');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnPlay = document.getElementById('btnPlay');
+        const btnNext = document.getElementById('btnNext');
+        const status = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                readCSV(file);
+            }
+        });
+
+        function readCSV(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const text = e.target.result;
+                    const lines = text.trim().split('\n');
+                    cards = lines.map(line => line.trim()).filter(line => line);
+                    
+                    if (cards.length === 0) {
+                        showError('CSVファイルが空です');
+                        return;
+                    }
+                    
+                    // ランダムシャッフル
+                    shuffledIndices = Array.from({length: cards.length}, (_, i) => i);
+                    for (let i = shuffledIndices.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+                    }
+                    
+                    currentIndex = 0;
+                    uploadArea.classList.add('hidden');
+                    cardDisplay.classList.add('active');
+                    updateDisplay();
+                    showStatus(`${cards.length}枚の札を読み込みました`);
+                    errorDiv.textContent = '';
+                } catch (err) {
+                    showError('CSVファイルの読み込みに失敗しました');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function updateDisplay() {
+            const cardIndex = shuffledIndices[currentIndex];
+            cardText.textContent = cards[cardIndex];
+            cardNumber.textContent = `${currentIndex + 1} / ${cards.length}`;
+            
+            btnPrev.disabled = currentIndex === 0;
+            btnNext.disabled = currentIndex === cards.length - 1;
+        }
+
+        function speak() {
+            if ('speechSynthesis' in window) {
+                const cardIndex = shuffledIndices[currentIndex];
+                const text = cards[cardIndex];
+                
+                window.speechSynthesis.cancel();
+                
+                utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                
+                utterance.onstart = () => {
+                    isPlaying = true;
+                    btnPlay.textContent = '■ 停止';
+                    btnPlay.classList.add('btn-playing');
+                };
+                
+                utterance.onend = () => {
+                    isPlaying = false;
+                    btnPlay.textContent = '▶ 再生';
+                    btnPlay.classList.remove('btn-playing');
+                };
+                
+                window.speechSynthesis.speak(utterance);
+            } else {
+                showError('お使いのブラウザは音声読み上げに対応していません');
+            }
+        }
+
+        function stopSpeech() {
+            window.speechSynthesis.cancel();
+            isPlaying = false;
+            btnPlay.textContent = '▶ 再生';
+            btnPlay.classList.remove('btn-playing');
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if (isPlaying) {
+                stopSpeech();
+            } else {
+                speak();
+            }
+        });
+
+        btnPrev.addEventListener('click', () => {
+            if (currentIndex > 0) {
+                stopSpeech();
+                currentIndex--;
+                updateDisplay();
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (currentIndex < cards.length - 1) {
+                stopSpeech();
+                currentIndex++;
+                updateDisplay();
+            }
+        });
+
+        function showError(message) {
+            errorDiv.textContent = message;
+        }
+
+        function showStatus(message) {
+            status.textContent = message;
+            setTimeout(() => {
+                status.textContent = '';
+            }, 3000);
+        }
+
+        // PWA対応
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('data:text/javascript;base64,').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>
