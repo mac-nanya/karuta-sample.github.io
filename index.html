@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>かるた読み上げ</title>
-    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi44GL44KL44Gf6Kqt44G/5LiK44GS44Ki44OX44OqIiwic2hvcnRfbmFtZSI6IuOBi+OCi+OBnyIsInN0YXJ0X3VybCI6Ii8iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjNDI4NWY0In0=">
+
     <style>
         * {
             margin: 0;
@@ -35,22 +35,9 @@
             font-size: 28px;
         }
         .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 15px;
-            padding: 40px 20px;
-            text-align: center;
-            margin-bottom: 20px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .upload-area:hover {
-            background: #f8f9ff;
-            border-color: #764ba2;
-        }
-        .upload-area.hidden {
             display: none;
         }
-        input[type="file"] {
+        .upload-area.hidden {
             display: none;
         }
         .upload-text {
@@ -162,8 +149,6 @@
         let isPlaying = false;
         let utterance = null;
 
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
         const cardDisplay = document.getElementById('cardDisplay');
         const cardText = document.getElementById('cardText');
         const cardNumber = document.getElementById('cardNumber');
@@ -173,46 +158,41 @@
         const status = document.getElementById('status');
         const errorDiv = document.getElementById('error');
 
-        uploadArea.addEventListener('click', () => fileInput.click());
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                readCSV(file);
-            }
+        // ページ読み込み時にdata.csvを自動読み込み
+        window.addEventListener('load', () => {
+            loadCSV();
         });
 
-        function readCSV(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const text = e.target.result;
-                    const lines = text.trim().split('\n');
-                    cards = lines.map(line => line.trim()).filter(line => line);
-                    
-                    if (cards.length === 0) {
-                        showError('CSVファイルが空です');
-                        return;
-                    }
-                    
-                    // ランダムシャッフル
-                    shuffledIndices = Array.from({length: cards.length}, (_, i) => i);
-                    for (let i = shuffledIndices.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
-                    }
-                    
-                    currentIndex = 0;
-                    uploadArea.classList.add('hidden');
-                    cardDisplay.classList.add('active');
-                    updateDisplay();
-                    showStatus(`${cards.length}枚の札を読み込みました`);
-                    errorDiv.textContent = '';
-                } catch (err) {
-                    showError('CSVファイルの読み込みに失敗しました');
+        async function loadCSV() {
+            try {
+                const response = await fetch('data.csv');
+                if (!response.ok) {
+                    throw new Error('CSVファイルが見つかりません');
                 }
-            };
-            reader.readAsText(file);
+                const text = await response.text();
+                const lines = text.trim().split('\n');
+                cards = lines.map(line => line.trim()).filter(line => line);
+                
+                if (cards.length === 0) {
+                    showError('CSVファイルが空です');
+                    return;
+                }
+                
+                // ランダムシャッフル
+                shuffledIndices = Array.from({length: cards.length}, (_, i) => i);
+                for (let i = shuffledIndices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+                }
+                
+                currentIndex = 0;
+                cardDisplay.classList.add('active');
+                updateDisplay();
+                showStatus(`${cards.length}枚の札を読み込みました`);
+            } catch (err) {
+                showError('data.csvの読み込みに失敗しました: ' + err.message);
+                cardText.textContent = 'data.csvを同じフォルダに配置してください';
+            }
         }
 
         function updateDisplay() {
@@ -296,11 +276,9 @@
             }, 3000);
         }
 
-        // PWA対応
+        // PWA対応（基本的なもの）
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('data:text/javascript;base64,').catch(() => {});
-            });
+            // Service Workerは必要に応じて後で追加
         }
     </script>
 </body>
